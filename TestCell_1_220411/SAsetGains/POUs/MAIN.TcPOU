@@ -1,0 +1,783 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="MAIN" Id="{21394934-b464-4553-a27e-d0c0b6519d24}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	// heartbeat
+	msthb AT %Q* : ARRAY[1..181] OF UDINT;
+	sa_indx : INT :=1;
+	
+	// enable, diable 
+	enable_all : BOOL := FALSE;
+	disable_all : BOOL := FALSE;
+	enable_cmd AT %Q* : ARRAY[1..170] OF BOOL;
+	cloop_stat AT %I* : ARRAY[1..170] OF BOOL;
+	enable_stat AT %I* : ARRAY[1..170] OF BOOL;
+	
+	// clear fault
+	slv_addr : UINT := 1002;
+	clear_all : BOOL := FALSE;
+	ctrl_clear_error :  BOOL;
+	delay_cycle : UINT := 1;
+	
+	// bump test all SAa
+	bump_start : BOOL := FALSE;
+	bump_force : REAL := 0;
+	bump_stop : BOOL := FALSE;
+	bump_axis : INT := 1;
+	delay_cycle2 : UINT := 1;
+	sa_indx2 : INT :=1;
+	
+	// ramp signal test
+	ramp_stop : BOOL;
+	ramp_start: BOOL;
+	ramp_start_single :BOOL;
+	slope : REAL;
+	ramp_cmd : REAL;	
+	
+	// read ncyl
+	read_ncyl : BOOL;
+	sa_indx3 : INT :=1;
+	slv_addr_ncyl : UINT :=1002;
+	
+	// read alias
+	read_alias : BOOL;
+	sa_indx7 : INT :=1;
+	slv_addr_alias : UINT :=1002;
+	
+	// read dongle
+	read_dongle : BOOL;
+	// sa_indx7 : INT :=1;
+	slv_addr_dongle : UINT :=1002;
+	dongle_nSubIndex : BYTE;
+	Fx_min :ARRAY[1..170] OF REAL;
+	Fy_min :ARRAY[1..170] OF REAL;
+	Fz_min :ARRAY[1..170] OF REAL;
+	Fx_max :ARRAY[1..170] OF REAL;
+	Fy_max :ARRAY[1..170] OF REAL;	
+	Fz_max :ARRAY[1..170] OF REAL;
+	
+	// write gains
+	write_gains : BOOL ;
+	write_SAgains : BOOL;
+	slv_addr_ncyl2 : UINT :=1002;
+	sa_indx4 : INT :=1;
+	subindex: BYTE := 16#04;
+	cylindex : WORD := 16#8001;
+	kp : REAL :=1.2;
+	ki : REAL := 0.8;
+	kd : REAL := 0.0;
+	dbp : REAL := 14;
+	dbn : REAL := -14;
+	dbi : REAL := 0.5;
+	gval : REAL := kp;
+	
+	// save_soc
+	slv_addr_soc : UINT := 1002;
+	save_soc_all : BOOL := FALSE;
+	delay_cycle4 : UINT := 1;
+	
+	// single SA Step
+	set_zero: BOOL;
+	singleSA_step: BOOL;
+	force : REAL := 0.0;
+	sa_indx5: INT := 1;
+	axis: INT := 1;
+	delay_cycle3: INT;
+	sa_indx6: INT := 1;
+	
+	//Force vectors
+	// control
+	force_cmd_X AT %Q* : ARRAY[1..170] OF REAL;
+	force_cmd_Y AT %Q* : ARRAY[1..170] OF REAL;
+	force_cmd_Z AT %Q* : ARRAY[1..170] OF REAL;
+	
+	// status
+	force_rb_X AT %I* : ARRAY[1..170] OF REAL;
+	force_rb_Y AT %I* : ARRAY[1..170] OF REAL;
+	force_rb_Z AT %I* : ARRAY[1..170] OF REAL;
+	force_sp_X AT %I* : ARRAY[1..170] OF REAL;
+	force_sp_Y AT %I* : ARRAY[1..170] OF REAL;
+	force_sp_Z AT %I* : ARRAY[1..170] OF REAL;
+	
+	
+	//pwm
+	pwm1 AT %I* : ARRAY[1..170] OF REAL;
+	pwm2 AT %I* : ARRAY[1..170] OF REAL;
+	pwm3 AT %I* : ARRAY[1..170] OF REAL;
+	
+	// Network parameters
+	sNetId_local : T_AmsNetId := '10.10.16.19.2.1';	// Address of this computer 
+	FrmWcStat AT %I* : ARRAY[1..7] OF UINT;
+	
+	// scope vars
+	scope_spX : REAL;
+	scope_spY : REAL;
+	scope_spZ : REAL;
+	scope_rbX : REAL;
+	scope_rbY : REAL;
+	scope_rbZ : REAL;
+	scope_pwm1 : REAL;
+	scope_pwm2 : REAL;
+	scope_pwm3 : REAL;
+	scope_alias : UINT;
+	scope_cyl :UDINT;
+
+
+	c: INT :=0;
+END_VAR
+
+VAR_INPUT
+	cyl : ARRAY[1..170] OF UDINT;
+	alias : ARRAY[1..170] OF UINT;
+	value : ARRAY[1..170] OF REAL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// send heartbeat to all SA and EPHS
+FOR sa_indx := 1 TO 181 BY 1 DO
+	msthb[sa_indx] := msthb[sa_indx] + 1;
+END_FOR
+
+
+// clear fault on all SAs
+IF (clear_all = TRUE AND slv_addr<1182) THEN
+	ctrl_clear_error := TRUE;
+	IF delay_cycle = 10 THEN
+		slv_addr := slv_addr + 1;
+		CASE  slv_addr OF
+			1001,1018,1033,1046,1063,1080,1097,1114,1131,1148,1165:
+			slv_addr := slv_addr+1;
+		END_CASE
+		delay_cycle := 1;
+	ELSE
+		delay_cycle := delay_cycle+1;	
+	END_IF
+	
+ELSE
+	slv_addr := 1002;
+	ctrl_clear_error := FALSE;
+END_IF
+
+// send enable signal to all SAs
+IF enable_all = TRUE THEN
+	FOR sa_indx := 1 TO 170 BY 1 DO
+		enable_cmd[sa_indx] := TRUE;
+	END_FOR
+END_IF
+
+// send disable signal to all SAs
+IF disable_all = TRUE THEN
+	FOR sa_indx := 1 TO 170 BY 1 DO
+		enable_cmd[sa_indx] := FALSE;
+	END_FOR
+	enable_all := FALSE;
+END_IF
+
+// Do xyz axis bump test on all SAs
+IF bump_stop = TRUE THEN;
+	bump_start := FALSE;
+	sa_indx2 := 2;
+	bump_axis := 0;
+	delay_cycle2 := 0;
+	FOR sa_indx := 1 TO 170 BY 1 DO
+		force_cmd_X[sa_indx] := 0;
+		force_cmd_Y[sa_indx] := 0; 
+		force_cmd_Z[sa_indx] := 0;
+		
+	END_FOR
+END_IF
+
+IF bump_start = TRUE THEN
+	IF delay_cycle2 = 500 THEN
+		delay_cycle2 := 1;
+		IF bump_axis < 3 THEN
+			bump_axis := bump_axis +1;
+		ELSE
+			bump_axis := 1;
+		END_IF
+		IF bump_axis = 1 THEN
+			sa_indx2 := sa_indx2 + 1;
+			IF sa_indx2 > 170 THEN
+				sa_indx2 := 2;
+			END_IF
+		END_IF
+			
+	ELSE
+		delay_cycle2 := delay_cycle2+1;
+		scope_spX := force_sp_x[sa_indx2];
+		scope_spY := force_sp_y[sa_indx2];
+		scope_spZ := force_sp_z[sa_indx2];
+		scope_rbX := force_rb_x[sa_indx2];
+		scope_rbY := force_rb_y[sa_indx2];
+		scope_rbZ := force_rb_z[sa_indx2];
+		scope_pwm1 := pwm1[sa_indx2];
+		scope_pwm2 := pwm2[sa_indx2];
+		scope_pwm3 := pwm3[sa_indx2];
+		scope_alias := alias[sa_indx2];
+		CASE bump_axis OF
+			1 :
+			force_cmd_X[sa_indx2] := bump_force;
+			force_cmd_X[sa_indx2-1] := 0;
+			force_cmd_Z[sa_indx2] := 0;
+			2 :
+			force_cmd_Y[sa_indx2] := bump_force;
+			force_cmd_Y[sa_indx2-1] := 0;
+			force_cmd_X[sa_indx2] := 0;
+			3 :
+			force_cmd_Z[sa_indx2] := bump_force;
+			force_cmd_Z[sa_indx2-1] := 0;
+			force_cmd_Y[sa_indx2] := 0;
+		END_CASE
+			
+	END_IF
+END_IF
+
+
+
+// Do ramp test on all SAs
+IF ramp_stop = TRUE THEN;
+	ramp_start := FALSE;
+	ramp_start_single := FALSE;
+	ramp_cmd := 0.0;
+	sa_indx2 := 1;
+	bump_axis := 0;
+	delay_cycle2 := 0;
+	FOR sa_indx := 1 TO 170 BY 1 DO
+		force_cmd_X[sa_indx] := 0;
+		force_cmd_Y[sa_indx] := 0; 
+		force_cmd_Z[sa_indx] := 0;
+		
+	END_FOR
+END_IF
+
+IF ramp_start = TRUE THEN
+	ramp_start_single := FALSE;
+	IF delay_cycle2 = 500 THEN
+		delay_cycle2 := 1;
+		slope := -slope;
+		ramp_cmd := 0;
+		IF cyl[sa_indx2] = 3 THEN
+			IF bump_axis < 3 THEN
+				bump_axis := bump_axis +1;
+			ELSE
+				bump_axis := 1;
+			END_IF
+		ELSE
+			bump_axis := 1;
+		END_IF		
+	ELSE
+		delay_cycle2 := delay_cycle2+1;
+		scope_spX := force_sp_x[sa_indx2];
+		scope_spY := force_sp_y[sa_indx2];
+		scope_spZ := force_sp_z[sa_indx2];
+		scope_rbX := force_rb_x[sa_indx2];
+		scope_rbY := force_rb_y[sa_indx2];
+		scope_rbZ := force_rb_z[sa_indx2];
+		scope_pwm1 := pwm1[sa_indx2];
+		scope_pwm2 := pwm2[sa_indx2];
+		scope_pwm3 := pwm3[sa_indx2];
+		scope_alias := alias[sa_indx2];
+		scope_cyl := cyl[sa_indx2];
+		
+		IF ramp_cmd > 250*abs(slope) THEN
+			slope := -1*slope;
+		END_IF
+		ramp_cmd := ramp_cmd + slope;
+		CASE bump_axis OF
+			1 :
+			force_cmd_Z[sa_indx2] := ramp_cmd;
+			IF sa_indx2 <> 1 THEN
+				force_cmd_Y[sa_indx2-1] := 0;
+				force_cmd_X[sa_indx2-1] := 0;	
+			END_IF
+		
+			2 :
+			force_cmd_Y[sa_indx2] := ramp_cmd;
+			IF sa_indx2 <> 1 THEN
+				force_cmd_X[sa_indx2-1] := 0;
+				force_cmd_Z[sa_indx2] := 0;	
+			END_IF
+			3 :
+			force_cmd_X[sa_indx2] := ramp_cmd;
+			IF sa_indx2 <> 1 THEN
+				force_cmd_Y[sa_indx2] := 0;
+				force_cmd_Z[sa_indx2-1] := 0;	
+			END_IF
+		END_CASE	
+	END_IF
+	IF bump_axis = 1 AND delay_cycle2 =500  THEN
+				sa_indx2 := sa_indx2 + 1;				
+	END_IF
+	IF sa_indx2 > 170 THEN
+			sa_indx2 := 1;
+	END_IF
+END_IF
+
+// ramp single axis
+
+IF ramp_start_single = TRUE THEN
+	ramp_start := FALSE;
+	IF delay_cycle2 = 500 THEN
+		delay_cycle2 := 1;
+		slope := -slope;
+		ramp_cmd := 0;
+		IF cyl[sa_indx2] = 3 THEN
+			IF bump_axis < 3 THEN
+				bump_axis := bump_axis +1;
+			ELSE
+				bump_axis := 1;
+			END_IF	
+		ELSE
+			bump_axis := 3;
+		END_IF			
+	ELSE
+		delay_cycle2 := delay_cycle2+1;
+		scope_spX := force_sp_x[sa_indx2];
+		scope_spY := force_sp_y[sa_indx2];
+		scope_spZ := force_sp_z[sa_indx2];
+		scope_rbX := force_rb_x[sa_indx2];
+		scope_rbY := force_rb_y[sa_indx2];
+		scope_rbZ := force_rb_z[sa_indx2];
+		scope_pwm1 := pwm1[sa_indx2];
+		scope_pwm2 := pwm2[sa_indx2];
+		scope_pwm3 := pwm3[sa_indx2];
+		
+		scope_alias := alias[sa_indx2];
+		scope_cyl := cyl[sa_indx2];
+		
+		
+		IF ramp_cmd > 250*abs(slope) THEN
+			slope := -1*slope;
+		END_IF
+		ramp_cmd := ramp_cmd + slope;
+		CASE bump_axis OF
+			1 :
+			force_cmd_X[sa_indx2] := ramp_cmd;
+			2 :
+			force_cmd_Y[sa_indx2] := ramp_cmd;
+			3 :
+			force_cmd_Z[sa_indx2] := ramp_cmd;
+		END_CASE
+			
+	END_IF
+END_IF
+
+// read ncyls on all SAs
+IF (read_ncyl = TRUE AND slv_addr_ncyl<1182) THEN
+	IF delay_cycle = 10 THEN
+		slv_addr_ncyl := slv_addr_ncyl + 1;
+		CASE  slv_addr_ncyl OF
+			1001,1018,1033,1046,1063,1080,1097,1114,1131,1148,1165:
+			slv_addr_ncyl := slv_addr_ncyl+1;
+		END_CASE
+		sa_indx3 := sa_indx3 + 1;
+		delay_cycle := 1;
+	ELSE
+		delay_cycle := delay_cycle+1;	
+	END_IF
+	
+ELSE
+	slv_addr_ncyl := 1002;
+	//ctrl_clear_error := FALSE;
+	sa_indx3 := 1;
+END_IF
+
+
+
+// read alias on all SAs
+IF (read_alias = TRUE AND slv_addr_alias<1182) THEN
+	IF delay_cycle = 10 THEN
+		slv_addr_alias := slv_addr_alias + 1;
+		CASE  slv_addr_alias OF
+			1001,1018,1033,1046,1063,1080,1097,1114,1131,1148,1165:
+			slv_addr_alias := slv_addr_alias+1;
+		END_CASE
+		sa_indx7 := sa_indx7 + 1;
+		delay_cycle := 1;
+	ELSE
+		delay_cycle := delay_cycle+1;	
+	END_IF
+	
+ELSE
+	slv_addr_alias := 1002;
+	//ctrl_clear_error := FALSE;
+	sa_indx7 := 1;
+END_IF
+
+// read dongles on all SAs
+
+//IF (read_dongle = TRUE AND slv_addr_dongle<1181) THEN
+//	IF delay_cycle = 10 THEN
+//		//dongle_nSubIndex :=16#03;
+//		slv_addr_dongle := slv_addr_dongle + 1;
+//		CASE  slv_addr_dongle OF
+//			1001,1018,1033,1046,1063,1080,1097,1114,1131,1148,1165:
+//			slv_addr_dongle := slv_addr_dongle+1;
+//		END_CASE
+//		sa_indx7 := sa_indx7 + 1;
+//		delay_cycle := 1;
+//	ELSE
+//		delay_cycle := delay_cycle+1;	
+//	END_IF
+	
+//ELSE
+//	slv_addr_dongle := 1002;
+//	//ctrl_clear_error := FALSE;
+//	//sa_indx7 := 1;
+//END_IF
+
+
+// write gains
+IF (write_gains = TRUE AND slv_addr_ncyl2<1181) THEN
+	write_SAgains := FALSE;
+	IF delay_cycle = 10 THEN
+		slv_addr_ncyl2 := slv_addr_ncyl2 + 1;
+		CASE  slv_addr_ncyl2 OF
+			1001,1018,1033,1046,1063,1080,1097,1114,1131,1148,1165:
+			slv_addr_ncyl2 := slv_addr_ncyl2+1;
+		END_CASE
+		sa_indx4 := sa_indx4 + 1;
+		delay_cycle := 1;
+	ELSE
+		delay_cycle := delay_cycle+1;	
+	END_IF	
+ELSIF (write_gains = TRUE AND slv_addr_ncyl2 >= 1181) THEN
+	slv_addr_ncyl2 := 1002;
+	sa_indx4 := 1;
+	CASE subindex OF
+		16#04 :
+			subindex := 16#05;
+			gval := ki;
+		16#05 :
+			subindex := 16#0B;
+			gval := dbp;
+		16#0B :
+			subindex := 16#0C;
+		gval := dbn;
+		16#0C :
+			subindex := 16#0E;
+			gval := dbi;
+		16#0E :
+			subindex := 16#04;
+			gval := kp;
+		ELSE
+			subindex:= 16#04;
+			gval :=kp;
+	END_CASE
+ELSE
+	slv_addr_ncyl2 := 1002;
+	sa_indx4 := 1;
+END_IF
+
+
+// save_soc
+IF (save_soc_all = TRUE AND slv_addr_soc<1181) THEN
+	IF delay_cycle4 = 10 THEN
+		slv_addr_soc := slv_addr_soc + 1;
+		CASE  slv_addr_soc OF
+			1001,1018,1033,1046,1063,1080,1097,1114,1131,1148,1165:
+			slv_addr_soc := slv_addr_soc+1;
+		END_CASE
+		delay_cycle4 := 1;
+	ELSE
+		delay_cycle4 := delay_cycle4+1;	
+	END_IF
+	
+ELSE
+	slv_addr_soc := 1002;
+END_IF
+
+// set 50 N step response for and actuator
+// set zero to all actuators
+IF set_zero = TRUE THEN
+	FOR sa_indx6 := 1 TO 170 BY 1 DO 
+		force_cmd_X[sa_indx6] := 0;
+		force_cmd_Y[sa_indx6] := 0;
+		force_cmd_Z[sa_indx6] := 0;
+	END_FOR
+END_IF
+
+// Do single actuator set reposne
+IF singleSA_step = TRUE THEN
+	scope_spX := force_sp_x[sa_indx5];
+	scope_spY := force_sp_y[sa_indx5];
+	scope_spZ := force_sp_z[sa_indx5];
+	scope_rbX := force_rb_x[sa_indx5];
+	scope_rbY := force_rb_y[sa_indx5];
+	scope_rbZ := force_rb_z[sa_indx5];
+	scope_pwm1 := pwm1[sa_indx5];
+	scope_pwm2 := pwm2[sa_indx5];
+	scope_pwm3 := pwm3[sa_indx5];
+	scope_alias := alias[sa_indx5];
+	CASE axis OF 
+		1:
+		IF delay_cycle3 = 1000 THEN
+			delay_cycle3 := 1;
+			force_cmd_X[sa_indx5] := 0;	
+			axis := 2;
+		ELSE
+			delay_cycle3 := delay_cycle3+1;
+			force_cmd_X[sa_indx5] := force;	
+		END_IF
+		2:
+		IF delay_cycle3 = 1000 THEN
+			delay_cycle3 := 1;
+			force_cmd_Y[sa_indx5] := 0;	
+			axis := 3;
+		ELSE
+			delay_cycle3 := delay_cycle3+1;
+			force_cmd_Y[sa_indx5] := force;	
+		END_IF
+		3:
+		IF delay_cycle3 = 1000 THEN
+			delay_cycle3 := 1;
+			force_cmd_Z[sa_indx5] := 0;
+			axis := 1;
+		ELSE
+			delay_cycle3 := delay_cycle3+1;
+			force_cmd_Z[sa_indx5] := force;	
+		END_IF
+	END_CASE
+ELSE
+	axis := 1;
+	delay_cycle3 := 1;
+	force_cmd_X[sa_indx5] := 0;
+	force_cmd_Y[sa_indx5] := 0;
+	force_cmd_Z[sa_indx5] := 0;
+	sa_indx5 := 1;
+END_IF
+
+// change gains of a single actuator
+// write gains for slv_addr_ncyl2
+IF (write_SAgains = TRUE) THEN
+	write_gains := FALSE;
+	IF delay_cycle = 10 THEN
+	//	sa_indx4 := sa_indx4 + 1;
+		delay_cycle := 1;
+	ELSE
+		delay_cycle := delay_cycle+1;	
+		CASE subindex OF
+			16#04 :
+				subindex := 16#05;
+				gval := ki;
+			16#05 :
+				subindex := 16#0B;
+				gval := dbp;
+			16#0B :
+				subindex := 16#0C;
+			gval := dbn;
+			16#0C :
+				subindex := 16#0E;
+				gval := dbi;
+			16#0E :
+				subindex := 16#04;
+				gval := kp;
+			ELSE
+				subindex:= 16#04;
+				gval := kp;
+		END_CASE
+	END_IF
+END_IF
+	
+
+// ramp single axis
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="159" Count="0" />
+      <LineId Id="164" Count="1" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="160" Count="0" />
+      <LineId Id="166" Count="1" />
+      <LineId Id="169" Count="3" />
+      <LineId Id="435" Count="2" />
+      <LineId Id="434" Count="0" />
+      <LineId Id="173" Count="7" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="161" Count="1" />
+      <LineId Id="48" Count="4" />
+      <LineId Id="209" Count="6" />
+      <LineId Id="208" Count="0" />
+      <LineId Id="78" Count="2" />
+      <LineId Id="753" Count="0" />
+      <LineId Id="82" Count="0" />
+      <LineId Id="773" Count="0" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="737" Count="2" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="735" Count="0" />
+      <LineId Id="86" Count="5" />
+      <LineId Id="775" Count="3" />
+      <LineId Id="774" Count="0" />
+      <LineId Id="762" Count="0" />
+      <LineId Id="766" Count="2" />
+      <LineId Id="759" Count="1" />
+      <LineId Id="772" Count="0" />
+      <LineId Id="96" Count="1" />
+      <LineId Id="740" Count="2" />
+      <LineId Id="744" Count="1" />
+      <LineId Id="743" Count="0" />
+      <LineId Id="1842" Count="1" />
+      <LineId Id="1841" Count="0" />
+      <LineId Id="1316" Count="0" />
+      <LineId Id="779" Count="1" />
+      <LineId Id="782" Count="1" />
+      <LineId Id="791" Count="0" />
+      <LineId Id="785" Count="1" />
+      <LineId Id="784" Count="0" />
+      <LineId Id="792" Count="0" />
+      <LineId Id="788" Count="1" />
+      <LineId Id="787" Count="0" />
+      <LineId Id="793" Count="0" />
+      <LineId Id="781" Count="0" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="889" Count="2" />
+      <LineId Id="895" Count="2" />
+      <LineId Id="1549" Count="0" />
+      <LineId Id="1066" Count="0" />
+      <LineId Id="898" Count="11" />
+      <LineId Id="1550" Count="0" />
+      <LineId Id="910" Count="1" />
+      <LineId Id="960" Count="0" />
+      <LineId Id="962" Count="0" />
+      <LineId Id="1562" Count="0" />
+      <LineId Id="1566" Count="4" />
+      <LineId Id="1576" Count="1" />
+      <LineId Id="1564" Count="0" />
+      <LineId Id="924" Count="7" />
+      <LineId Id="1839" Count="1" />
+      <LineId Id="1838" Count="0" />
+      <LineId Id="1205" Count="0" />
+      <LineId Id="1203" Count="0" />
+      <LineId Id="961" Count="0" />
+      <LineId Id="955" Count="0" />
+      <LineId Id="957" Count="1" />
+      <LineId Id="963" Count="0" />
+      <LineId Id="932" Count="2" />
+      <LineId Id="1478" Count="1" />
+      <LineId Id="1481" Count="0" />
+      <LineId Id="1480" Count="0" />
+      <LineId Id="935" Count="0" />
+      <LineId Id="937" Count="1" />
+      <LineId Id="1482" Count="2" />
+      <LineId Id="940" Count="2" />
+      <LineId Id="1485" Count="2" />
+      <LineId Id="944" Count="1" />
+      <LineId Id="947" Count="0" />
+      <LineId Id="1706" Count="1" />
+      <LineId Id="1705" Count="0" />
+      <LineId Id="1709" Count="1" />
+      <LineId Id="1708" Count="0" />
+      <LineId Id="892" Count="2" />
+      <LineId Id="1493" Count="1" />
+      <LineId Id="1551" Count="0" />
+      <LineId Id="1495" Count="3" />
+      <LineId Id="1552" Count="0" />
+      <LineId Id="1556" Count="3" />
+      <LineId Id="1555" Count="0" />
+      <LineId Id="1560" Count="1" />
+      <LineId Id="1554" Count="0" />
+      <LineId Id="1511" Count="7" />
+      <LineId Id="1834" Count="3" />
+      <LineId Id="1519" Count="0" />
+      <LineId Id="1712" Count="0" />
+      <LineId Id="1520" Count="8" />
+      <LineId Id="1534" Count="1" />
+      <LineId Id="1540" Count="1" />
+      <LineId Id="1546" Count="2" />
+      <LineId Id="1492" Count="0" />
+      <LineId Id="360" Count="0" />
+      <LineId Id="359" Count="0" />
+      <LineId Id="362" Count="0" />
+      <LineId Id="364" Count="1" />
+      <LineId Id="428" Count="0" />
+      <LineId Id="431" Count="0" />
+      <LineId Id="433" Count="0" />
+      <LineId Id="432" Count="0" />
+      <LineId Id="374" Count="0" />
+      <LineId Id="366" Count="7" />
+      <LineId Id="443" Count="0" />
+      <LineId Id="361" Count="0" />
+      <LineId Id="1181" Count="2" />
+      <LineId Id="1185" Count="17" />
+      <LineId Id="1184" Count="0" />
+      <LineId Id="1985" Count="0" />
+      <LineId Id="1988" Count="0" />
+      <LineId Id="2312" Count="0" />
+      <LineId Id="2164" Count="1" />
+      <LineId Id="2181" Count="0" />
+      <LineId Id="2166" Count="14" />
+      <LineId Id="1986" Count="1" />
+      <LineId Id="194" Count="0" />
+      <LineId Id="358" Count="0" />
+      <LineId Id="196" Count="3" />
+      <LineId Id="439" Count="2" />
+      <LineId Id="438" Count="0" />
+      <LineId Id="218" Count="0" />
+      <LineId Id="200" Count="3" />
+      <LineId Id="205" Count="1" />
+      <LineId Id="220" Count="0" />
+      <LineId Id="285" Count="1" />
+      <LineId Id="289" Count="1" />
+      <LineId Id="288" Count="0" />
+      <LineId Id="291" Count="4" />
+      <LineId Id="297" Count="0" />
+      <LineId Id="296" Count="0" />
+      <LineId Id="298" Count="6" />
+      <LineId Id="287" Count="0" />
+      <LineId Id="207" Count="0" />
+      <LineId Id="427" Count="0" />
+      <LineId Id="357" Count="0" />
+      <LineId Id="184" Count="0" />
+      <LineId Id="708" Count="3" />
+      <LineId Id="713" Count="12" />
+      <LineId Id="707" Count="0" />
+      <LineId Id="499" Count="0" />
+      <LineId Id="498" Count="0" />
+      <LineId Id="500" Count="1" />
+      <LineId Id="505" Count="0" />
+      <LineId Id="509" Count="1" />
+      <LineId Id="506" Count="0" />
+      <LineId Id="502" Count="1" />
+      <LineId Id="269" Count="0" />
+      <LineId Id="268" Count="0" />
+      <LineId Id="524" Count="0" />
+      <LineId Id="1318" Count="5" />
+      <LineId Id="1845" Count="1" />
+      <LineId Id="1844" Count="0" />
+      <LineId Id="1317" Count="0" />
+      <LineId Id="535" Count="1" />
+      <LineId Id="540" Count="2" />
+      <LineId Id="562" Count="0" />
+      <LineId Id="543" Count="2" />
+      <LineId Id="539" Count="0" />
+      <LineId Id="547" Count="3" />
+      <LineId Id="563" Count="0" />
+      <LineId Id="551" Count="2" />
+      <LineId Id="546" Count="0" />
+      <LineId Id="555" Count="3" />
+      <LineId Id="564" Count="0" />
+      <LineId Id="559" Count="2" />
+      <LineId Id="554" Count="0" />
+      <LineId Id="537" Count="0" />
+      <LineId Id="525" Count="0" />
+      <LineId Id="614" Count="1" />
+      <LineId Id="617" Count="2" />
+      <LineId Id="616" Count="0" />
+      <LineId Id="526" Count="0" />
+      <LineId Id="1325" Count="0" />
+      <LineId Id="1324" Count="0" />
+      <LineId Id="1327" Count="3" />
+      <LineId Id="1336" Count="3" />
+      <LineId Id="1344" Count="19" />
+      <LineId Id="1366" Count="0" />
+      <LineId Id="1326" Count="0" />
+      <LineId Id="270" Count="0" />
+      <LineId Id="1489" Count="0" />
+      <LineId Id="1488" Count="0" />
+      <LineId Id="1490" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

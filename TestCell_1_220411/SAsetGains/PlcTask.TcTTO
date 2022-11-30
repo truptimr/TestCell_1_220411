@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <Task Name="PlcTask" Id="{962b4135-d844-47e3-b2ae-e96f9edecbcc}">
+    <!--CycleTime in micro seconds.-->
+    <CycleTime>10000</CycleTime>
+    <Priority>20</Priority>
+    <PouCall>
+      <Name>MAIN</Name>
+    </PouCall>
+    <PouCall>
+      <Name>clear_fault</Name>
+    </PouCall>
+    <PouCall>
+      <Name>read_ncyl</Name>
+    </PouCall>
+    <PouCall>
+      <Name>write_gains</Name>
+    </PouCall>
+    <PouCall>
+      <Name>save_soc</Name>
+    </PouCall>
+    <PouCall>
+      <Name>read_alias</Name>
+    </PouCall>
+    <PouCall>
+      <Name>read_dongle</Name>
+    </PouCall>
+    <TaskFBGuid>{ffdd0838-6934-4832-80d0-80f9b4c359a0}</TaskFBGuid>
+    <Fb_init>{6946c655-2bd6-4647-a496-5a074be53c62}</Fb_init>
+    <Fb_exit>{ba0571a5-26c4-40cd-9b06-0ea470a748c3}</Fb_exit>
+    <CycleUpdate>{4ddf825d-f151-47c4-bd0f-1142b80277fc}</CycleUpdate>
+    <PostCycleUpdate>{5a561738-5384-4e68-b933-3eceadf41f23}</PostCycleUpdate>
+  </Task>
+</TcPlcObject>

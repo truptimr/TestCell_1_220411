@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="read_write_SA_gains" Id="{778d0164-fde4-4359-87da-26f3d0bce984}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM read_write_SA_gains
+VAR
+	fbSdoWrite      : FB_EcCoESdoWrite;
+	fbSdoRead      : FB_EcCoESdoRead;
+	nSlaveAddr      : UINT := 1003; (* Port Number of EtherCAT Slave *)
+	Index_cyl1          : WORD := 16#8001; (* CoE Object Index *)
+	Index_cyl2          : WORD := 16#8002; (* CoE Object Index *)
+	Index_cyl3          : WORD := 16#8003; (* CoE Object Index *)
+	Index_soc          : WORD := 16#8005; (* CoE Object Index *)
+	SubIndex_kp       : BYTE := 16#04; (* Subindex of CoE Object *)
+	SubIndex_ki       : BYTE := 16#05; (* Subindex of CoE Object *)
+	SubIndex_dbp       : BYTE := 16#0B; (* Subindex of CoE Object *)
+	SubIndex_dbn       : BYTE := 16#0C; (* Subindex of CoE Object *)
+	SubIndex_dbi       : BYTE := 16#0E; (* Subindex of CoE Object *)
+	ncyl 				: BYTE := 16#05;
+	bExecute        : BOOL; (* rising edge starts writing to the CoE Object *)
+	bError          : BOOL;
+	nErrId          : UDINT;		
+	clear_error: BOOL := TRUE;
+	configured : BOOL := FALSE;
+	done			: BOOL := FALSE;
+	pAddr : INT := 1018;
+	sNetId_local: INT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <LineIds Name="read_write_SA_gains">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

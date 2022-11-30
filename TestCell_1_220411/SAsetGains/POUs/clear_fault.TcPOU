@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="clear_fault" Id="{a2e4c70b-bfa8-46e1-98a5-b5b4dda59d49}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM clear_fault
+VAR
+	fbSdoWrite      : FB_EcCoESdoWrite;
+	nSlaveAddr      : UINT := 1003; (* Port Number of EtherCAT Slave *)
+	nIndex          : WORD := 16#8006; (* CoE Object Index *)
+	nSubIndex       : BYTE := 16#01; (* Subindex of CoE Object *)
+	bExecute        : BOOL; (* rising edge starts writing to the CoE Object *)
+	bError          : BOOL;
+	nErrId          : UDINT;		
+	clear_error: BOOL := TRUE;
+	configured : BOOL := FALSE;
+	done			: BOOL := FALSE;
+	pAddr : INT := 1018;
+	sNetId_local: INT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[bExecute := MAIN.ctrl_clear_error;
+
+fbSdoWrite(
+        sNetId          := MAIN.sNetId_local,
+        //nSlaveAddr      := nSlaveAddr,
+		nSlaveAddr := MAIN.slv_addr,
+        nIndex          := nIndex,
+        nSubIndex       := nSubIndex,
+        pSrcBuf         := ADR(clear_error),
+        cbBufLen        := SIZEOF(clear_error),
+        bExecute        := bExecute
+);
+
+IF NOT fbSdoWrite.bBusy THEN
+        bExecute := FALSE;
+		//done	:= TRUE;
+        IF NOT bError THEN 
+                (* write successful *)
+                bError := FALSE;
+                nErrId := 0;
+        ELSE 
+                (* write failed *)
+                bError := fbSdoWrite.bError;
+                nErrId := fbSdoWrite.nErrId;
+        END_IF
+        fbSdoWrite(bExecute := FALSE);
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="clear_fault">
+      <LineId Id="21" Count="25" />
+      <LineId Id="64" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

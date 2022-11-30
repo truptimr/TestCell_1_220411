@@ -1,0 +1,43 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="read_alias" Id="{64c818e3-1875-4130-86d7-294fde00884d}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM read_alias
+VAR
+	fbSdoRead  : FB_EcCoESdoRead;
+    //sNetId     : T_AmsNetId := '172.16.2.131.2.1';
+    bExecute   : BOOL;
+    nSlaveAddr : UINT := 1003;
+    nIndex     : WORD := 16#8008;
+    nSubIndex  : BYTE :=16#01;
+    alias   : UINT;
+    bError     : BOOL;
+    nErrId     : UDINT;
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[bExecute := MAIN.read_alias;
+fbSdoRead(sNetId:= MAIN.sNetId_local,nSlaveAddr :=MAIN.slv_addr_alias, nIndex:=nIndex, nSubIndex :=nSubIndex, pDstBuf:= ADR(alias), cbBufLen:=SIZEOF(alias),bExecute:=bExecute);
+MAIN.alias[MAIN.sa_indx7] := alias;
+
+IF NOT fbSdoRead.bBusy THEN
+        bExecute := FALSE;
+		//done	:= TRUE;
+        IF NOT bError THEN 
+                (* write successful *)
+                bError := FALSE;
+                nErrId := 0;
+        ELSE 
+                (* write failed *)
+                bError := fbSdoRead.bError;
+                nErrId := fbSdoRead.nErrId;
+        END_IF
+        fbSdoRead(bExecute := FALSE);
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="read_alias">
+      <LineId Id="17" Count="16" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>
